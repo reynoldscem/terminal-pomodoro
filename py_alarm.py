@@ -1,4 +1,6 @@
-'''Simple terminal pomodoro timer.'''
+'''Simple terminal pomodoro timer.
+By default a 25 minute, then 5 minute timer on loop.
+'''
 from itertools import cycle
 import argparse
 import pyglet
@@ -8,6 +10,11 @@ import os
 REFRESH_RATE = 0.05
 DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR = (
     'data/siren_noise_soundbible_shorter.wav'
+)
+
+FILE_DIR = os.path.dirname(__file__)
+DEFAULT_SOUNDPATH = (
+    os.path.join(FILE_DIR, DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR)
 )
 
 
@@ -27,10 +34,9 @@ def build_parser():
         help='Cycle through countdown of this many minutes.'
     )
 
-    file_dir = os.path.dirname(__file__)
     parser.add_argument(
         '--sound-path', type=str,
-        default=os.path.join(file_dir, DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR),
+        default=DEFAULT_SOUNDPATH,
         help='Path to alarm sound.'
     )
 
@@ -64,6 +70,9 @@ def countdown(minutes_total):
 
 def main():
     args = build_parser().parse_args()
+    assert os.path.isfile(args.sound_path), (
+        '{} is not a file.'.format(args.sound_path)
+    )
 
     try:
         while True:
