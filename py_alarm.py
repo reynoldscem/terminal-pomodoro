@@ -17,8 +17,14 @@ FILE_DIR = os.path.dirname(__file__)
 DEFAULT_SOUNDPATH = (
     os.path.join(FILE_DIR, DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR)
 )
+TIME_FORMAT = '{:02d}:{:02d} / {:02d}:00'
 
-TERMINAL_WIDTH = shutil.get_terminal_size((80, 20)).columns
+
+def get_terminal_width():
+    return shutil.get_terminal_size((80, 20)).columns
+
+
+TERMINAL_WIDTH = get_terminal_width()
 
 
 class CycleAction(argparse.Action):
@@ -55,19 +61,45 @@ def run_sound(sound_path):
     pyglet.app.run()
 
 
+def minutes_seconds_elapsed(elapsed):
+    minutes, seconds = divmod(elapsed, 60)
+    _, minutes = divmod(minutes, 60)
+
+    return int(minutes), int(seconds)
+
+
+def print_time(minutes, seconds, total_minutes):
+    print('\r', end='')
+    time_str = TIME_FORMAT.format(minutes, seconds, total_minutes)
+    time_str = time_str.center(TERMINAL_WIDTH)
+    print(time_str, end='')
+
+
+def clear_if_changed(changed):
+    if changed:
+        os.system('clear')
+
+
 def countdown(minutes_total):
+    global TERMINAL_WIDTH
+
     upper_limit = minutes_total * 60
     start_time = time.time()
     while True:
         elapsed = time.time() - start_time
-        minutes, seconds = divmod(elapsed, 60)
-        _, minutes = divmod(minutes, 60)
-        timer_numbers = (int(minutes), int(seconds), minutes_total)
-        print('\r', end='')
-        print(
-            '{:02d}:{:02d} / {:02d}:00'
-            ''.format(*timer_numbers).center(TERMINAL_WIDTH), end='')
+        timer_numbers = (*minutes_seconds_elapsed(elapsed), minutes_total)
+
+        current_width = get_terminal_width()
+        width_changed = current_width != TERMINAL_WIDTH
+        TERMINAL_WIDTH = current_width
+        clear_if_changed(width_changed)
+
+        print_time(*timer_numbers)
         time.sleep(REFRESH_RATE)
+
+        if width_changed:
+            os.system('clear')
+
         if elapsed >= upper_limit:
             print()
             break
