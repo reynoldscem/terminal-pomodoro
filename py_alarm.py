@@ -9,14 +9,21 @@ import time
 import os
 
 REFRESH_RATE = 0.05
-DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR = (
-    'data/siren_noise_soundbible_shorter_fadeout.wav'
+DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR = os.path.join(
+    'siren_noise_soundbible_shorter_fadeout.wav'
 )
+pyglet.resource.path = [
+    os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        'data'
+    )
+]
 
-FILE_DIR = os.path.dirname(__file__)
-DEFAULT_SOUNDPATH = (
-    os.path.join(FILE_DIR, DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR)
-)
+# FILE_DIR = os.path.dirname(__file__)
+# DEFAULT_SOUNDPATH = (
+#     os.path.join(FILE_DIR, DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR)
+# )
+DEFAULT_SOUNDPATH = DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR
 TIME_FORMAT = '{:02d}:{:02d} / {:02d}:00'
 
 
@@ -105,17 +112,30 @@ def countdown(minutes_total):
             break
 
 
+def check_soundpath(sound_path):
+    if os.path.isfile(sound_path):
+        sound_dir = os.path.dirname(os.path.realpath(sound_path))
+        pyglet.resource.path.append(sound_dir)
+
+        return os.path.basename(sound_path)
+
+    for path in pyglet.resource.path:
+        if os.path.isfile(os.path.join(path, sound_path)):
+            return sound_path
+    else:
+        raise FileNotFoundError('Could not locate {}'.format(sound_path))
+
+
 def main():
     args = build_parser().parse_args()
-    assert os.path.isfile(args.sound_path), (
-        '{} is not a file.'.format(args.sound_path)
-    )
+
+    args.sound_path = check_soundpath(args.sound_path)
 
     try:
         while True:
             countdown(next(args.countdowns))
             run_sound(args.sound_path)
-            input('Press return to reset'.center(TERMINAL_WIDTH))
+            input('Return to reset'.center(TERMINAL_WIDTH))
     except KeyboardInterrupt:
         print('', end='\r')
         print()
