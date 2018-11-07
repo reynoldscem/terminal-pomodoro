@@ -3,6 +3,7 @@ By default a 25 minute, then 5 minute timer on loop.
 '''
 from itertools import cycle
 import argparse
+import signal
 import shutil
 import pyglet
 import time
@@ -32,6 +33,7 @@ def get_terminal_width():
 
 
 TERMINAL_WIDTH = get_terminal_width()
+CHANGED = False
 
 
 class CycleAction(argparse.Action):
@@ -82,9 +84,12 @@ def print_time(minutes, seconds, total_minutes):
     print(time_str, end='')
 
 
-def clear_if_changed(changed):
-    if changed:
+def clear_if_changed():
+    global CHANGED
+    if CHANGED:
+        print()
         os.system('clear')
+        CHANGED = False
 
 
 def countdown(minutes_total):
@@ -96,16 +101,10 @@ def countdown(minutes_total):
         elapsed = time.time() - start_time
         timer_numbers = (*minutes_seconds_elapsed(elapsed), minutes_total)
 
-        current_width = get_terminal_width()
-        width_changed = current_width != TERMINAL_WIDTH
-        TERMINAL_WIDTH = current_width
-        clear_if_changed(width_changed)
-
         print_time(*timer_numbers)
         time.sleep(REFRESH_RATE)
 
-        if width_changed:
-            os.system('clear')
+        clear_if_changed()
 
         if elapsed >= upper_limit:
             print()
@@ -126,7 +125,16 @@ def check_soundpath(sound_path):
         raise FileNotFoundError('Could not locate {}'.format(sound_path))
 
 
+def signal_handler(*args):
+    global TERMINAL_WIDTH, CHANGED
+
+    TERMINAL_WIDTH = get_terminal_width()
+    CHANGED = True
+
+
 def main():
+    signal.signal(signal.SIGWINCH, signal_handler)
+
     args = build_parser().parse_args()
 
     args.sound_path = check_soundpath(args.sound_path)
