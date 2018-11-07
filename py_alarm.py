@@ -2,11 +2,14 @@
 By default a 25 minute, then 5 minute timer on loop.
 '''
 from itertools import cycle
+from copy import deepcopy
 import argparse
 import signal
 import shutil
 import pyglet
 import time
+import termios
+import sys
 import os
 
 REFRESH_RATE = 0.05
@@ -34,6 +37,20 @@ def get_terminal_width():
 
 TERMINAL_WIDTH = get_terminal_width()
 CHANGED = False
+
+
+# The following stops the interrupt character (or other special chars)
+#  being echoed into the terminal.
+fd = sys.stdin.fileno()
+old = termios.tcgetattr(fd)
+new = deepcopy(old)
+new[3] = new[3] & ~termios.ECHO
+termios.tcsetattr(fd, termios.TCSADRAIN, new)
+
+
+def reset_termios():
+    # Reset at the end
+    termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
 class CycleAction(argparse.Action):
@@ -125,35 +142,41 @@ def check_soundpath(sound_path):
         raise FileNotFoundError('Could not locate {}'.format(sound_path))
 
 
-def signal_handler(*args):
+def resize_handler(*args):
     global TERMINAL_WIDTH, CHANGED
 
     TERMINAL_WIDTH = get_terminal_width()
     CHANGED = True
 
 
+def exit(*args):
+    print('', end='\r')
+    print('Goodbye!'.center(TERMINAL_WIDTH))
+
+    # Hack to stop strange callback happening on exit
+    pyglet.media.drivers.get_audio_driver().delete()
+
+    reset_termios()
+    sys.exit(0)
+
+
 def main():
-    signal.signal(signal.SIGWINCH, signal_handler)
+    signal.signal(signal.SIGWINCH, resize_handler)
+    signal.signal(signal.SIGINT, exit)
 
     args = build_parser().parse_args()
 
     args.sound_path = check_soundpath(args.sound_path)
 
-    try:
-        while True:
-            countdown(next(args.countdowns))
-            run_sound(args.sound_path)
-            input('Return to reset'.center(TERMINAL_WIDTH))
-    except KeyboardInterrupt:
-        print('', end='\r')
-        print()
-        print('Goodbye!'.center(TERMINAL_WIDTH))
+    for countdown_amount in args.countdowns:
+        countdown(countdown_amount)
+        run_sound(args.sound_path)
+        input('Return to reset'.center(TERMINAL_WIDTH))
+    else:
+        # Shouldn't actually get here.
+        print('Out of countdowns!'.center(TERMINAL_WIDTH))
 
-        # Hack to stop strange callback happening on exit
-        pyglet.media.drivers.get_audio_driver().delete()
-    except StopIteration:
-        # Shouldn't actually get here, because of defaults in argparse.
-        print('Need to have some countdowns!'.center(TERMINAL_WIDTH))
+    exit()
 
 
 if __name__ == '__main__':
