@@ -1,56 +1,53 @@
 '''Simple terminal pomodoro timer.
 By default a 25 minute, then 5 minute timer on loop.
 '''
+from functools import partial
 from itertools import cycle
 from copy import deepcopy
 import argparse
+import termios
 import signal
 import shutil
 import pyglet
 import time
-import termios
 import sys
 import os
 
 REFRESH_RATE = 0.05
-DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR = os.path.join(
+DEFAULT_SOUNDPATH = os.path.join(
     'siren_noise_soundbible_shorter_fadeout.wav'
 )
-pyglet.resource.path = [
-    os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        'data'
-    )
-]
-
-DEFAULT_SOUNDPATH = DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR
+REAL_DIRNAME = os.path.dirname(os.path.realpath(__file__))
+pyglet.resource.path = [os.path.join(REAL_DIRNAME, 'data')]
 TIME_FORMAT = '{:02d}:{:02d} / {:02d}:00'
+
+
+TERMINAL_WIDTH = None
+CHANGED = False
+
+TERM_HIDE_CHAR, TERM_SHOW_CHAR = ('\033[?25l', '\033[?25h')
 
 
 def get_terminal_width():
     return shutil.get_terminal_size((80, 20)).columns
 
 
-TERMINAL_WIDTH = get_terminal_width()
-CHANGED = False
+def setup_terminal():
+    # The following stops the interrupt character (or other special chars)
+    #  being echoed into the terminal.
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    new = deepcopy(old)
+    new[3] = new[3] & ~termios.ECHO
+    termios.tcsetattr(fd, termios.TCSADRAIN, new)
+    sys.stdout.write(TERM_HIDE_CHAR)
 
-TERM_HIDE_CHAR, TERM_SHOW_CHAR = ('\033[?25l', '\033[?25h')
+    def reset_terminal():
+        # Reset at the end
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write(TERM_SHOW_CHAR)
 
-
-# The following stops the interrupt character (or other special chars)
-#  being echoed into the terminal.
-fd = sys.stdin.fileno()
-old = termios.tcgetattr(fd)
-new = deepcopy(old)
-new[3] = new[3] & ~termios.ECHO
-termios.tcsetattr(fd, termios.TCSADRAIN, new)
-sys.stdout.write(TERM_HIDE_CHAR)
-
-
-def reset_terminal():
-    # Reset at the end
-    termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    sys.stdout.write(TERM_SHOW_CHAR)
+    return reset_terminal
 
 
 class CycleAction(argparse.Action):
@@ -72,6 +69,7 @@ def build_parser():
     parser.add_argument(
         '--sound-path', type=str,
         default=DEFAULT_SOUNDPATH,
+        action=SoundPathAction,
         help='Path to alarm sound.'
     )
 
@@ -105,6 +103,9 @@ def clear_if_changed():
     global CHANGED
     if CHANGED:
         print()
+        # This might give you some garbage characters depending
+        #  on the value of $TERM. They should be hidden anyway.
+        # Also won't work on Windows. But nor will most of this...
         os.system('clear')
         CHANGED = False
 
@@ -128,18 +129,23 @@ def countdown(minutes_total):
             break
 
 
-def check_soundpath(sound_path):
-    if os.path.isfile(sound_path):
-        sound_dir = os.path.dirname(os.path.realpath(sound_path))
-        pyglet.resource.path.append(sound_dir)
+class SoundPathAction(argparse.Action):
+    def __call__(self, parser, args, values, option_string=None):
+        setattr(args, self.dest, self.check_soundpath(values))
 
-        return os.path.basename(sound_path)
+    @staticmethod
+    def check_soundpath(sound_path):
+        if os.path.isfile(sound_path):
+            sound_dir = os.path.dirname(os.path.realpath(sound_path))
+            pyglet.resource.path.append(sound_dir)
 
-    for path in pyglet.resource.path:
-        if os.path.isfile(os.path.join(path, sound_path)):
-            return sound_path
-    else:
-        raise FileNotFoundError('Could not locate {}'.format(sound_path))
+            return os.path.basename(sound_path)
+
+        for path in pyglet.resource.path:
+            if os.path.isfile(os.path.join(path, sound_path)):
+                return sound_path
+        else:
+            raise FileNotFoundError('Could not locate {}'.format(sound_path))
 
 
 def resize_handler(*args):
@@ -149,7 +155,7 @@ def resize_handler(*args):
     CHANGED = True
 
 
-def exit(*args):
+def exit(reset_terminal, *args):
     print('', end='\r')
     print('Goodbye!'.center(TERMINAL_WIDTH))
 
@@ -160,22 +166,27 @@ def exit(*args):
     sys.exit(0)
 
 
-def main():
-    signal.signal(signal.SIGWINCH, resize_handler)
-    signal.signal(signal.SIGINT, exit)
-    resize_handler()
-
-    args = build_parser().parse_args()
-
-    args.sound_path = check_soundpath(args.sound_path)
-
-    for countdown_amount in args.countdowns:
+def main_loop(countdowns, sound_path):
+    for countdown_amount in countdowns:
         countdown(countdown_amount)
-        run_sound(args.sound_path)
+        run_sound(sound_path)
         input('Return to reset'.center(TERMINAL_WIDTH))
     else:
         # Shouldn't actually get here.
         print('Out of countdowns!'.center(TERMINAL_WIDTH))
+
+
+def main():
+    args = build_parser().parse_args()
+
+    reset_terminal = setup_terminal()
+    exit_partial_app = partial(exit, reset_terminal)
+    resize_handler()
+
+    signal.signal(signal.SIGWINCH, resize_handler)
+    signal.signal(signal.SIGINT, exit_partial_app)
+
+    main_loop(args.countdowns, args.sound_path)
 
     exit()
 
