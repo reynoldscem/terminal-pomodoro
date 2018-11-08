@@ -23,10 +23,6 @@ pyglet.resource.path = [
     )
 ]
 
-# FILE_DIR = os.path.dirname(__file__)
-# DEFAULT_SOUNDPATH = (
-#     os.path.join(FILE_DIR, DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR)
-# )
 DEFAULT_SOUNDPATH = DEFAULT_SOUNDPATH_RELATIVE_TO_FILE_DIR
 TIME_FORMAT = '{:02d}:{:02d} / {:02d}:00'
 
@@ -38,6 +34,8 @@ def get_terminal_width():
 TERMINAL_WIDTH = get_terminal_width()
 CHANGED = False
 
+TERM_HIDE_CHAR, TERM_SHOW_CHAR = ('\033[?25l', '\033[?25h')
+
 
 # The following stops the interrupt character (or other special chars)
 #  being echoed into the terminal.
@@ -46,11 +44,13 @@ old = termios.tcgetattr(fd)
 new = deepcopy(old)
 new[3] = new[3] & ~termios.ECHO
 termios.tcsetattr(fd, termios.TCSADRAIN, new)
+sys.stdout.write(TERM_HIDE_CHAR)
 
 
-def reset_termios():
+def reset_terminal():
     # Reset at the end
     termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    sys.stdout.write(TERM_SHOW_CHAR)
 
 
 class CycleAction(argparse.Action):
@@ -156,13 +156,14 @@ def exit(*args):
     # Hack to stop strange callback happening on exit
     pyglet.media.drivers.get_audio_driver().delete()
 
-    reset_termios()
+    reset_terminal()
     sys.exit(0)
 
 
 def main():
     signal.signal(signal.SIGWINCH, resize_handler)
     signal.signal(signal.SIGINT, exit)
+    resize_handler()
 
     args = build_parser().parse_args()
 
