@@ -27,6 +27,8 @@ CHANGED = False
 
 TERM_HIDE_CHAR, TERM_SHOW_CHAR = ('\033[?25l', '\033[?25h')
 
+PYGLET_VOLUME_LIB_REQ = '1.4.0b1'
+
 
 def get_terminal_width():
     return shutil.get_terminal_size((80, 20)).columns
@@ -55,6 +57,25 @@ class CycleAction(argparse.Action):
         setattr(args, self.dest, cycle(values))
 
 
+class VolumeAction(argparse.Action):
+    def __call__(self, parser, args, value, option_string=None):
+        if pyglet.version < PYGLET_VOLUME_LIB_REQ and value is not None:
+            print(
+                'Setting volume requires pyglet {}, you have pyglet {}.'
+                ''.format(PYGLET_VOLUME_LIB_REQ, pyglet.version).center(
+                    TERMINAL_WIDTH
+                ),
+            )
+            print('Will ignore value of --volume'.center(TERMINAL_WIDTH))
+            print('Enter to continue Ctrl + C to exit.'.center(TERMINAL_WIDTH))
+            input()
+            value = None
+        elif value is not None:
+            value = float(value)
+
+        setattr(args, self.dest, value)
+
+
 def build_parser():
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -73,12 +94,22 @@ def build_parser():
         help='Path to alarm sound.'
     )
 
+    parser.add_argument(
+        '--volume', type=float,
+        default=(0.05 if pyglet.version >= PYGLET_VOLUME_LIB_REQ else None),
+        action=VolumeAction,
+        help='Volume from 0 to 1.'
+    )
+
     return parser
 
 
-def run_sound(sound_path):
+def run_sound(sound_path, volume=None):
     sound = pyglet.resource.media(sound_path)
-    sound.play()
+    player = sound.play()
+
+    if volume is not None and volume < 1:
+        player.volume = volume
 
     # This is kind of an abuse of pyglet
     pyglet.clock.schedule_once(lambda x: pyglet.app.exit(), sound.duration)
@@ -87,7 +118,6 @@ def run_sound(sound_path):
 
 def minutes_seconds_elapsed(elapsed):
     minutes, seconds = divmod(elapsed, 60)
-    _, minutes = divmod(minutes, 60)
 
     return int(minutes), int(seconds)
 
@@ -113,6 +143,8 @@ def clear_if_changed():
 def countdown(minutes_total):
     global TERMINAL_WIDTH
 
+    clear_if_changed()
+
     upper_limit = minutes_total * 60
     start_time = time.time()
     while True:
@@ -125,7 +157,7 @@ def countdown(minutes_total):
         clear_if_changed()
 
         if elapsed >= upper_limit:
-            print()
+            sys.stdout.flush()
             break
 
 
@@ -155,7 +187,7 @@ def resize_handler(*args):
     CHANGED = True
 
 
-def exit(reset_terminal, *args):
+def exit(reset_terminal, *args, code=0):
     print('', end='\r')
     print('Goodbye!'.center(TERMINAL_WIDTH))
 
@@ -163,13 +195,14 @@ def exit(reset_terminal, *args):
     pyglet.media.drivers.get_audio_driver().delete()
 
     reset_terminal()
-    sys.exit(0)
+    sys.exit(code)
 
 
-def main_loop(countdowns, sound_path):
+def main_loop(countdowns, sound_path, volume=None):
     for countdown_amount in countdowns:
         countdown(countdown_amount)
-        run_sound(sound_path)
+        run_sound(sound_path, volume=volume)
+        print('', end='\r')
         input('Return to reset'.center(TERMINAL_WIDTH))
     else:
         # Shouldn't actually get here.
@@ -177,18 +210,22 @@ def main_loop(countdowns, sound_path):
 
 
 def main():
-    args = build_parser().parse_args()
+    try:
+        reset_terminal = setup_terminal()
+        exit_partial_app = partial(exit, reset_terminal)
 
-    reset_terminal = setup_terminal()
-    exit_partial_app = partial(exit, reset_terminal)
-    resize_handler()
+        resize_handler()
 
-    signal.signal(signal.SIGWINCH, resize_handler)
-    signal.signal(signal.SIGINT, exit_partial_app)
+        signal.signal(signal.SIGWINCH, resize_handler)
+        signal.signal(signal.SIGINT, exit_partial_app)
 
-    main_loop(args.countdowns, args.sound_path)
+        args = build_parser().parse_args()
 
-    exit()
+        main_loop(args.countdowns, args.sound_path, args.volume)
+    except Exception as e:
+        print('Exception was raised: {}'.format(e).center(TERMINAL_WIDTH))
+        print('Cleaning up'.center(TERMINAL_WIDTH))
+        exit_partial_app(code=1)
 
 
 if __name__ == '__main__':
