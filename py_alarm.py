@@ -5,6 +5,7 @@ from functools import partial
 from itertools import cycle
 from copy import deepcopy
 import argparse
+import _thread
 import termios
 import signal
 import shutil
@@ -26,6 +27,9 @@ TERMINAL_WIDTH = None
 CHANGED = False
 
 TERM_HIDE_CHAR, TERM_SHOW_CHAR = ('\033[?25l', '\033[?25h')
+INVERT_ON, INVERT_OFF = '\033[7m', '\033[27m'
+BOLD_ON, BOLD_OFF = '\033[1m', '\033[21m'
+BLUE, DEFAULT = '\033[34m', '\033[39m'
 
 PYGLET_VOLUME_LIB_REQ = '1.4.0b1'
 
@@ -198,12 +202,37 @@ def exit(reset_terminal, *args, code=0):
     sys.exit(code)
 
 
+def input_thread(input_recorder):
+    input_recorder.append(input())
+
+
+def format_reset_string(string):
+    return ''.join(
+        (BLUE, INVERT_ON, BOLD_ON, string, BOLD_OFF, INVERT_OFF, DEFAULT)
+    )
+
+
+def reset_loop():
+    input_list = []
+    _thread.start_new_thread(input_thread, (input_list,))
+    for even in cycle([True, False]):
+        clear_if_changed()
+        print('', end='\r')
+        string = 'Return to reset'.center(TERMINAL_WIDTH)
+        reset_string = format_reset_string(string) if even else string
+
+        print(reset_string, end='')
+
+        time.sleep(0.75)
+        if len(input_list) > 0:
+            break
+
+
 def main_loop(countdowns, sound_path, volume=None):
     for countdown_amount in countdowns:
         countdown(countdown_amount)
         run_sound(sound_path, volume=volume)
-        print('', end='\r')
-        input('Return to reset'.center(TERMINAL_WIDTH))
+        reset_loop()
     else:
         # Shouldn't actually get here.
         print('Out of countdowns!'.center(TERMINAL_WIDTH))
