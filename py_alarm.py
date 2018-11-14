@@ -214,7 +214,6 @@ def countdown(minutes_total):
     clear_if_changed()
 
     upper_limit = minutes_total * 60
-    upper_limit = 2
     start_time = time.time()
 
     pause_obj = PauseObject()
