@@ -1,6 +1,9 @@
 # terminal-pomodoro
 
-Just a simple pomodoro timer for the terminal.
+Just a simple pomodoro timer for the terminal. Sound plays and terminal flashes
+when timer is finished. Hit return during the timer to pause it, and return
+again to unpause. Will redraw if terminal changes size (so feel free to make the
+font larger / smaller on the fly).
 
 Example:
 
