@@ -5,6 +5,9 @@ when timer is finished. Hit return during the timer to pause it, and return
 again to unpause. Will redraw if terminal changes size (so feel free to make the
 font larger / smaller on the fly).
 
+Makes pretty strong assumptions about OS. Might work on other POSIX / UNIX OS's.
+Windows is a hard no.
+
 Example:
 
 ```$ python py_alarm.py 1 2 3```
