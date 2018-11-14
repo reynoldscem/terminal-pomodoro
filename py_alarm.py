@@ -151,6 +151,13 @@ def clear_if_changed():
         CHANGED = False
 
 
+def pause_thread(paused, pause_state_change):
+    while True:
+        input()
+        paused[0] = not paused[0]
+        pause_state_change[0] = True
+
+
 def countdown(minutes_total):
     global TERMINAL_WIDTH
 
@@ -158,8 +165,25 @@ def countdown(minutes_total):
 
     upper_limit = minutes_total * 60
     start_time = time.time()
+
+    paused = [False]
+    pause_state_change = [False]
+    _thread.start_new_thread(pause_thread, (paused, pause_state_change))
+
+    total_pause_time = 0
     while True:
-        elapsed = time.time() - start_time
+        if paused[0]:
+            if pause_state_change[0]:
+                pause_state_change[0] = False
+                pause_start = time.time()
+            pause_time = time.time() - pause_start
+        else:
+            if pause_state_change[0]:
+                pause_state_change[0] = False
+                total_pause_time += pause_time
+            pause_time = 0
+
+        elapsed = time.time() - start_time - total_pause_time - pause_time
         timer_numbers = (*minutes_seconds_elapsed(elapsed), minutes_total)
 
         print_time(*timer_numbers)
