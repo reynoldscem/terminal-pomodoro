@@ -151,11 +151,48 @@ def clear_if_changed():
         CHANGED = False
 
 
-def pause_thread(paused, pause_state_change):
+def pause_thread(pause_obj):
     while True:
         input()
-        paused[0] = not paused[0]
-        pause_state_change[0] = True
+        pause_obj.toggle_pause()
+
+
+class PauseObject():
+    def __init__(self):
+        self.paused = 0
+        self.state_changed = False
+
+        self.current_pause_time = 0
+        self.total_pause_time = 0
+
+        self.pause_start = None
+
+    def toggle_pause(self):
+        self.paused = not self.paused
+        self.state_changed = True
+
+    def event(self):
+        if self.state_changed:
+            self.state_changed = False
+            return True
+        else:
+            return False
+
+    def poll(self):
+        if self.paused:
+            if self.event():
+                self.pause_start = time.time()
+            self.current_pause_time = time.time() - self.pause_start
+        else:
+            if self.event():
+                self.total_pause_time += self.current_pause_time
+            self.current_pause_time = 0
+
+    def pause_time(self):
+        if self.paused:
+            return self.current_pause_time + self.total_pause_time
+        else:
+            return self.total_pause_time
 
 
 def countdown(minutes_total):
@@ -166,24 +203,13 @@ def countdown(minutes_total):
     upper_limit = minutes_total * 60
     start_time = time.time()
 
-    paused = [False]
-    pause_state_change = [False]
-    _thread.start_new_thread(pause_thread, (paused, pause_state_change))
+    pause_obj = PauseObject()
+    _thread.start_new_thread(pause_thread, (pause_obj,))
 
-    total_pause_time = 0
     while True:
-        if paused[0]:
-            if pause_state_change[0]:
-                pause_state_change[0] = False
-                pause_start = time.time()
-            pause_time = time.time() - pause_start
-        else:
-            if pause_state_change[0]:
-                pause_state_change[0] = False
-                total_pause_time += pause_time
-            pause_time = 0
+        pause_obj.poll()
 
-        elapsed = time.time() - start_time - total_pause_time - pause_time
+        elapsed = time.time() - start_time - pause_obj.pause_time()
         timer_numbers = (*minutes_seconds_elapsed(elapsed), minutes_total)
 
         print_time(*timer_numbers)
