@@ -7,6 +7,7 @@ from copy import deepcopy
 import argparse
 import _thread
 import termios
+import select
 import signal
 import shutil
 import pyglet
@@ -15,6 +16,7 @@ import sys
 import os
 
 REFRESH_RATE = 0.05
+FLASH_TIME = 0.75
 DEFAULT_SOUNDPATH = os.path.join(
     'siren_noise_soundbible_shorter_fadeout.wav'
 )
@@ -157,9 +159,10 @@ def clear_if_changed():
 
 
 def pause_thread(pause_obj):
-    while True:
-        input()
-        pause_obj.toggle_pause()
+    while pause_obj.alive:
+        while sys.stdin in select.select([sys.stdin], [], [], REFRESH_RATE)[0]:
+            sys.stdin.readline()
+            pause_obj.toggle_pause()
 
 
 class PauseObject():
@@ -171,6 +174,8 @@ class PauseObject():
         self.total_pause_time = 0
 
         self.pause_start = None
+
+        self.alive = True
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -199,6 +204,9 @@ class PauseObject():
         else:
             return self.total_pause_time
 
+    def kill(self):
+        self.alive = False
+
 
 def countdown(minutes_total):
     global TERMINAL_WIDTH
@@ -206,6 +214,7 @@ def countdown(minutes_total):
     clear_if_changed()
 
     upper_limit = minutes_total * 60
+    upper_limit = 2
     start_time = time.time()
 
     pause_obj = PauseObject()
@@ -223,6 +232,7 @@ def countdown(minutes_total):
         clear_if_changed()
 
         if elapsed >= upper_limit:
+            pause_obj.kill()
             sys.stdout.flush()
             break
 
@@ -277,7 +287,10 @@ def format_reset_string(string):
 def reset_loop():
     input_list = []
     _thread.start_new_thread(input_thread, (input_list,))
-    for even in cycle([True, False]):
+
+    even = True
+    time_since_flash = 0
+    while True:
         clear_if_changed()
         print('', end='\r')
         string = 'Return to reset'.center(TERMINAL_WIDTH)
@@ -285,7 +298,12 @@ def reset_loop():
 
         print(reset_string, end='')
 
-        time.sleep(0.75)
+        time.sleep(REFRESH_RATE)
+        time_since_flash += REFRESH_RATE
+        if time_since_flash >= FLASH_TIME:
+            even = not even
+            time_since_flash = 0
+
         if len(input_list) > 0:
             break
 
@@ -294,6 +312,7 @@ def main_loop(countdowns, sound_path, volume=None):
     for countdown_amount in countdowns:
         countdown(countdown_amount)
         run_sound(sound_path, volume=volume)
+        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
         reset_loop()
     else:
         # Shouldn't actually get here.
