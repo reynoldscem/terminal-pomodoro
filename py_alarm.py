@@ -32,6 +32,13 @@ BOLD_ON, BOLD_OFF = '\033[1m', '\033[21m'
 BLUE, DEFAULT = '\033[34m', '\033[39m'
 
 PYGLET_VOLUME_LIB_REQ = '1.4.0b1'
+if pyglet.version < PYGLET_VOLUME_LIB_REQ:
+    import warnings
+    version_warning_string = (
+        'Volume not supported on pyglet < {}, you have {}'
+        ''.format(PYGLET_VOLUME_LIB_REQ, pyglet.version)
+    )
+    warnings.warn(version_warning_string, UserWarning)
 
 
 def get_terminal_width():
