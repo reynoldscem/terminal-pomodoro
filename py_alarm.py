@@ -20,7 +20,7 @@ DEFAULT_SOUNDPATH = os.path.join(
 )
 REAL_DIRNAME = os.path.dirname(os.path.realpath(__file__))
 pyglet.resource.path = [os.path.join(REAL_DIRNAME, 'data')]
-TIME_FORMAT = '{:02d}:{:02d} / {:02d}:00'
+TIME_FORMAT = '{:02d}:{:02d} {} {:02d}:00'
 
 
 TERMINAL_WIDTH = None
@@ -133,10 +133,15 @@ def minutes_seconds_elapsed(elapsed):
     return int(minutes), int(seconds)
 
 
-def print_time(minutes, seconds, total_minutes):
+def print_time(minutes, seconds, total_minutes, paused=False):
     print('\r', end='')
-    time_str = TIME_FORMAT.format(minutes, seconds, total_minutes)
+
+    separator = u'\u23F8' if paused else '/'
+
+    time_str = TIME_FORMAT.format(minutes, seconds, separator, total_minutes)
     time_str = time_str.center(TERMINAL_WIDTH)
+    if paused:
+        time_str = ''.join((BOLD_ON, BLUE, time_str, BOLD_OFF, DEFAULT))
     print(time_str, end='')
 
 
@@ -212,7 +217,7 @@ def countdown(minutes_total):
         elapsed = time.time() - start_time - pause_obj.pause_time()
         timer_numbers = (*minutes_seconds_elapsed(elapsed), minutes_total)
 
-        print_time(*timer_numbers)
+        print_time(*timer_numbers, paused=pause_obj.paused)
         time.sleep(REFRESH_RATE)
 
         clear_if_changed()
