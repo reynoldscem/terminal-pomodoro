@@ -16,7 +16,9 @@ import sys
 import os
 
 REFRESH_RATE = 0.05
+GOODBYE_DELAY = 0.2
 FLASH_TIME = 0.75
+
 DEFAULT_SOUNDPATH = os.path.join(
     'siren_noise_soundbible_shorter_fadeout.wav'
 )
@@ -28,7 +30,8 @@ TIME_FORMAT = '{:02d}:{:02d} {} {:02d}:00'
 TERMINAL_WIDTH = None
 CHANGED = False
 
-TERM_HIDE_CHAR, TERM_SHOW_CHAR = ('\033[?25l', '\033[?25h')
+TERM_HIDE_CHAR, TERM_SHOW_CHAR = '\033[?25l', '\033[?25h'
+SAVE_TERM, RESTORE_TERM = '\033[?47h', '\033[?47l'
 INVERT_ON, INVERT_OFF = '\033[7m', '\033[27m'
 BOLD_ON, BOLD_OFF = '\033[1m', '\033[21m'
 BLUE, DEFAULT = '\033[34m', '\033[39m'
@@ -49,18 +52,26 @@ def get_terminal_width():
 
 def setup_terminal():
     # The following stops the interrupt character (or other special chars)
-    #  being echoed into the terminal.
+    #  being echoed into the terminal, along with the cursor.
+    sys.stdout.write(TERM_HIDE_CHAR)
+
+    # This prevents user input being echoed out into the terminal, so it can
+    #  be exclusively used as input to the program.
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     new = deepcopy(old)
     new[3] = new[3] & ~termios.ECHO
     termios.tcsetattr(fd, termios.TCSADRAIN, new)
-    sys.stdout.write(TERM_HIDE_CHAR)
+
+    # This saves the contents of the current terminal.
+    sys.stdout.write(SAVE_TERM)
 
     def reset_terminal():
-        # Reset at the end
+        # Reset all at the end, echoing, showing special chars, and previous
+        #  terminal contents.
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
         sys.stdout.write(TERM_SHOW_CHAR)
+        sys.stdout.write(RESTORE_TERM)
 
     return reset_terminal
 
@@ -269,6 +280,8 @@ def exit(reset_terminal, *args, code=0):
     # Hack to stop strange callback happening on exit
     pyglet.media.drivers.get_audio_driver().delete()
 
+    time.sleep(GOODBYE_DELAY)
+
     reset_terminal()
     sys.exit(code)
 
@@ -311,6 +324,9 @@ def main_loop(countdowns, sound_path, volume=None):
     for countdown_amount in countdowns:
         countdown(countdown_amount)
         run_sound(sound_path, volume=volume)
+
+        # Clear standard input incase user was pressing things before
+        #  return message is displayed.
         termios.tcflush(sys.stdin, termios.TCIOFLUSH)
         reset_loop()
     else:
