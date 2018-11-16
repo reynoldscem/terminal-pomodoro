@@ -2,6 +2,7 @@
 By default a 25 minute, then 5 minute timer on loop.
 '''
 from functools import partial
+from platform import system
 from itertools import cycle
 from copy import deepcopy
 import argparse
@@ -348,7 +349,38 @@ def check_tty():
     sys.exit(1)
 
 
+def check_os():
+    platform_string = system()
+    if 'win32' in platform_string:
+        # Just give up... There is a plenty of posix / linux stuff here.
+        #  Feel free to remove this and try it out if you'd like to push
+        #  towards Windows support, but it's not on my radar.
+        raise OSError(
+            'System is {}. Windows is not supported.'
+            ''.format(platform_string)
+        )
+    elif 'darwin' in platform_string:
+        import warnings
+        version_warning_string = (
+            'System is {}. Mac may not work as expected. Support is planned.'
+            ' If this doesn\'t work for you please report your issue.'
+            ''.format(platform_string)
+        )
+        warnings.warn(version_warning_string, UserWarning)
+    else:
+        import warnings
+        version_warning_string = (
+            'System is {}. This may not work as expected.'
+            ' Support is not planned.'
+            ' If you would like support, and this tool doesn\'t work for you'
+            ' please report your issue, with details of your system.'
+            ''.format(platform_string)
+        )
+        warnings.warn(version_warning_string, UserWarning)
+
+
 def main():
+    check_os()
     check_tty()
     try:
         reset_terminal = setup_terminal()
