@@ -334,7 +334,20 @@ def main_loop(countdowns, sound_path, volume=None):
         print('Out of countdowns!'.center(TERMINAL_WIDTH))
 
 
+def check_tty():
+    is_tty = os.isatty(sys.stdout.fileno())
+    if is_tty:
+        return
+
+    print(
+        'Can only operate on a tty, are you piping or redirecting output?',
+        file=sys.stderr
+    )
+    sys.exit(1)
+
+
 def main():
+    check_tty()
     try:
         reset_terminal = setup_terminal()
         exit_partial_app = partial(exit, reset_terminal)
