@@ -69,9 +69,10 @@ def setup_terminal():
     def reset_terminal():
         # Reset all at the end, echoing, showing special chars, and previous
         #  terminal contents.
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-        sys.stdout.write(TERM_SHOW_CHAR)
-        sys.stdout.write(RESTORE_TERM)
+        try:
+            sys.stdout.write(TERM_SHOW_CHAR + RESTORE_TERM)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
     return reset_terminal
 
@@ -274,16 +275,17 @@ def resize_handler(*args):
 
 
 def exit(reset_terminal, *args, code=0):
-    print('', end='\r')
-    print('Goodbye!'.center(TERMINAL_WIDTH))
+    try:
+        print('', end='\r')
+        print('Goodbye!'.center(TERMINAL_WIDTH))
 
-    # Hack to stop strange callback happening on exit
-    pyglet.media.drivers.get_audio_driver().delete()
+        # Hack to stop strange callback happening on exit
+        pyglet.media.drivers.get_audio_driver().delete()
 
-    time.sleep(GOODBYE_DELAY)
-
-    reset_terminal()
-    sys.exit(code)
+        time.sleep(GOODBYE_DELAY)
+    finally:
+        reset_terminal()
+        sys.exit(code)
 
 
 def input_thread(input_recorder):
