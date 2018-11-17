@@ -5,7 +5,7 @@ when timer is finished. Hit return during the timer to pause it, and return
 again to unpause. Will redraw if terminal changes size (so feel free to make the
 font larger / smaller on the fly).
 
-Makes pretty strong assumptions about OS. Might work on other POSIX / UNIX OS's.
+Makes pretty strong assumptions about Linux as the OS. Might work on other POSIX / UNIX OS's.
 Windows is a hard no.
 
 Example:
@@ -31,9 +31,9 @@ optional arguments:
   --volume VOLUME       Volume from 0 to 1.
 ```
 
-To use the volume flag you will need `pyglet >= 1.4.0b1` to use this. To install
+To use the volume flag you will need `pyglet >= 1.4.0b1` to use this. To install 
 `pyglet`'s dev version use:
 ```
-pip install future; pip install --upgrade
-https://bitbucket.org/pyglet/pyglet/get/tip.zip
+pip install future
+pip install --upgrade https://bitbucket.org/pyglet/pyglet/get/pyglet-1.4.0b1.zip
 ```
