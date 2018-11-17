@@ -31,9 +31,6 @@ optional arguments:
   --volume VOLUME       Volume from 0 to 1.
 ```
 
-To use the volume flag you will need `pyglet >= 1.4.0b1` to use this. To install 
-`pyglet`'s dev version use:
-```
-pip install future
-pip install --upgrade https://bitbucket.org/pyglet/pyglet/get/pyglet-1.4.0b1.zip
-```
+To use the volume flag you will need `pyglet >= 1.4.0b1`. The `requirements.txt`
+will try to install this. Older versions of pyglet will work, but without
+volume.
