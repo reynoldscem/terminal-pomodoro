@@ -31,6 +31,7 @@ TIME_FORMAT = '{:02d}:{:02d} {} {:02d}:00'
 TERMINAL_WIDTH = None
 CHANGED = False
 
+ALTERNATE_SCREEN_ENTER, ALTERNATE_SCREEN_EXIT = '\033[?1049h', '\033[?1049l'
 TERM_HIDE_CHAR, TERM_SHOW_CHAR = '\033[?25l', '\033[?25h'
 SAVE_TERM, RESTORE_TERM = '\033[?47h', '\033[?47l'
 INVERT_ON, INVERT_OFF = '\033[7m', '\033[27m'
@@ -52,6 +53,8 @@ def get_terminal_width():
 
 
 def setup_terminal():
+    sys.stdout.write(ALTERNATE_SCREEN_ENTER)
+
     # The following stops the interrupt character (or other special chars)
     #  being echoed into the terminal, along with the cursor.
     sys.stdout.write(TERM_HIDE_CHAR)
@@ -71,7 +74,9 @@ def setup_terminal():
         # Reset all at the end, echoing, showing special chars, and previous
         #  terminal contents.
         try:
-            sys.stdout.write(TERM_SHOW_CHAR + RESTORE_TERM)
+            sys.stdout.write(
+                TERM_SHOW_CHAR + RESTORE_TERM + ALTERNATE_SCREEN_EXIT
+            )
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
