@@ -1,2 +1,5 @@
-future==0.16.0
-pyglet==1.3.2
+future>=0.16.0
+
+# pyglet
+# Not yet on pypi
+https://bitbucket.org/pyglet/pyglet/get/pyglet-1.4.0b1.zip
