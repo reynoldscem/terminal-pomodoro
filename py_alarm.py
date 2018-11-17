@@ -11,20 +11,40 @@ import termios
 import select
 import signal
 import shutil
-import pyglet
 import time
 import sys
 import os
+
+from pydub import AudioSegment
+from pydub.utils import get_player_name
+
+import subprocess
+from tempfile import NamedTemporaryFile
+PLAYER = get_player_name()
+
+
+def play(seg):
+    with NamedTemporaryFile('wb', suffix='.wav') as fd:
+        devnull = open(os.devnull, 'w')
+        seg.export(fd.name, 'wav')
+        subprocess.call(
+            [PLAYER, '-nodisp', '-autoexit', fd.name],
+            stdout=devnull,
+            stderr=devnull,
+        )
+
 
 REFRESH_RATE = 0.05
 GOODBYE_DELAY = 0.2
 FLASH_TIME = 0.75
 
+REAL_DIRNAME = os.path.dirname(os.path.realpath(__file__))
 DEFAULT_SOUNDPATH = os.path.join(
+    REAL_DIRNAME, 'data',
     'siren_noise_soundbible_shorter_fadeout.wav'
 )
 REAL_DIRNAME = os.path.dirname(os.path.realpath(__file__))
-pyglet.resource.path = [os.path.join(REAL_DIRNAME, 'data')]
+
 TIME_FORMAT = '{:02d}:{:02d} {} {:02d}:00'
 
 
@@ -38,15 +58,6 @@ INVERT_ON, INVERT_OFF = '\033[7m', '\033[27m'
 BOLD_ON, BOLD_OFF = '\033[1m', '\033[21m'
 BLUE, DEFAULT = '\033[34m', '\033[39m'
 
-PYGLET_VOLUME_LIB_REQ = '1.4.0b1'
-if pyglet.version < PYGLET_VOLUME_LIB_REQ:
-    import warnings
-    version_warning_string = (
-        'Volume not supported on pyglet < {}, you have {}'
-        ''.format(PYGLET_VOLUME_LIB_REQ, pyglet.version)
-    )
-    warnings.warn(version_warning_string, UserWarning)
-
 
 def get_terminal_width():
     return shutil.get_terminal_size((80, 20)).columns
@@ -54,6 +65,7 @@ def get_terminal_width():
 
 def setup_terminal():
     sys.stdout.write(ALTERNATE_SCREEN_ENTER)
+    sys.stderr.write(ALTERNATE_SCREEN_EXIT)
 
     # The following stops the interrupt character (or other special chars)
     #  being echoed into the terminal, along with the cursor.
@@ -90,19 +102,12 @@ class CycleAction(argparse.Action):
 
 class VolumeAction(argparse.Action):
     def __call__(self, parser, args, value, option_string=None):
-        if pyglet.version < PYGLET_VOLUME_LIB_REQ and value is not None:
-            print(
-                'Setting volume requires pyglet {}, you have pyglet {}.'
-                ''.format(PYGLET_VOLUME_LIB_REQ, pyglet.version).center(
-                    TERMINAL_WIDTH
-                ),
+        value = float(value)
+        if not 0.0 <= value <= 1.0:
+            raise parser.error(
+                'Volume {} is outside of (0, 1)'
+                ''.format(value)
             )
-            print('Will ignore value of --volume'.center(TERMINAL_WIDTH))
-            print('Enter to continue Ctrl + C to exit.'.center(TERMINAL_WIDTH))
-            input()
-            value = None
-        elif value is not None:
-            value = float(value)
 
         setattr(args, self.dest, value)
 
@@ -127,7 +132,7 @@ def build_parser():
 
     parser.add_argument(
         '--volume', type=float,
-        default=(0.05 if pyglet.version >= PYGLET_VOLUME_LIB_REQ else None),
+        default=0.05,
         action=VolumeAction,
         help='Volume from 0 to 1.'
     )
@@ -135,16 +140,19 @@ def build_parser():
     return parser
 
 
+def linear_scale_to_DB_offset(volume, eps=1e-12):
+    from math import log10
+    return 20 * log10(volume + eps)
+
+
 def run_sound(sound_path, volume=None):
-    sound = pyglet.resource.media(sound_path)
-    player = sound.play()
-
     if volume is not None and volume < 1:
-        player.volume = volume
+        volume_offset = linear_scale_to_DB_offset(volume)
+    else:
+        volume_offset = 0
 
-    # This is kind of an abuse of pyglet
-    pyglet.clock.schedule_once(lambda x: pyglet.app.exit(), sound.duration)
-    pyglet.app.run()
+    sound = AudioSegment.from_wav(sound_path)
+    play(sound + volume_offset)
 
 
 def minutes_seconds_elapsed(elapsed):
@@ -261,14 +269,7 @@ class SoundPathAction(argparse.Action):
     @staticmethod
     def check_soundpath(sound_path):
         if os.path.isfile(sound_path):
-            sound_dir = os.path.dirname(os.path.realpath(sound_path))
-            pyglet.resource.path.append(sound_dir)
-
-            return os.path.basename(sound_path)
-
-        for path in pyglet.resource.path:
-            if os.path.isfile(os.path.join(path, sound_path)):
-                return sound_path
+            return os.path.realpath(sound_path)
         else:
             raise FileNotFoundError('Could not locate {}'.format(sound_path))
 
@@ -283,18 +284,17 @@ def resize_handler(*args):
 def exit(reset_terminal, *args, code=0):
     try:
         print('', end='\r')
-        print('Goodbye!'.center(TERMINAL_WIDTH))
 
-        # Hack to stop strange callback happening on exit
-        pyglet.media.drivers.get_audio_driver().delete()
-
-        time.sleep(GOODBYE_DELAY)
+        if code == 0:
+            print('Goodbye!'.center(TERMINAL_WIDTH))
+            time.sleep(GOODBYE_DELAY)
     finally:
         reset_terminal()
         sys.exit(code)
 
 
 def input_thread(input_recorder):
+    sys.stdout.write(ALTERNATE_SCREEN_ENTER)
     input_recorder.append(input())
 
 
@@ -307,6 +307,7 @@ def format_reset_string(string):
 def reset_loop():
     input_list = []
     _thread.start_new_thread(input_thread, (input_list,))
+    os.system('clear')
 
     even = True
     time_since_flash = 0
@@ -387,6 +388,8 @@ def check_os():
 
 
 def main():
+    args = build_parser().parse_args()
+
     check_os()
     check_tty()
     try:
@@ -398,12 +401,12 @@ def main():
         signal.signal(signal.SIGWINCH, resize_handler)
         signal.signal(signal.SIGINT, exit_partial_app)
 
-        args = build_parser().parse_args()
-
         main_loop(args.countdowns, args.sound_path, args.volume)
     except Exception as e:
-        print('Exception was raised: {}'.format(e).center(TERMINAL_WIDTH))
-        print('Cleaning up'.center(TERMINAL_WIDTH))
+        sys.stderr.write(
+            'Exception was raised: {}'.format(e).center(TERMINAL_WIDTH)
+        )
+
         exit_partial_app(code=1)
 
 
