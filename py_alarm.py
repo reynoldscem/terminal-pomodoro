@@ -20,6 +20,7 @@ REFRESH_RATE = 0.05
 GOODBYE_DELAY = 0.2
 FLASH_TIME = 0.75
 
+REAL_DIRNAME = os.path.dirname(os.path.realpath(__file__))
 DEFAULT_SOUNDPATH = os.path.join(
     'siren_noise_soundbible_shorter_fadeout.wav'
 )
@@ -31,6 +32,7 @@ TIME_FORMAT = '{:02d}:{:02d} {} {:02d}:00'
 TERMINAL_WIDTH = None
 CHANGED = False
 
+ALTERNATE_SCREEN_ENTER, ALTERNATE_SCREEN_EXIT = '\033[?1049h', '\033[?1049l'
 TERM_HIDE_CHAR, TERM_SHOW_CHAR = '\033[?25l', '\033[?25h'
 SAVE_TERM, RESTORE_TERM = '\033[?47h', '\033[?47l'
 INVERT_ON, INVERT_OFF = '\033[7m', '\033[27m'
@@ -52,6 +54,9 @@ def get_terminal_width():
 
 
 def setup_terminal():
+    sys.stdout.write(ALTERNATE_SCREEN_ENTER)
+    sys.stderr.write(ALTERNATE_SCREEN_EXIT)
+
     # The following stops the interrupt character (or other special chars)
     #  being echoed into the terminal, along with the cursor.
     sys.stdout.write(TERM_HIDE_CHAR)
@@ -71,7 +76,9 @@ def setup_terminal():
         # Reset all at the end, echoing, showing special chars, and previous
         #  terminal contents.
         try:
-            sys.stdout.write(TERM_SHOW_CHAR + RESTORE_TERM)
+            sys.stdout.write(
+                TERM_SHOW_CHAR + RESTORE_TERM + ALTERNATE_SCREEN_EXIT
+            )
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
@@ -156,7 +163,7 @@ def print_time(minutes, seconds, total_minutes, paused=False):
     time_str = TIME_FORMAT.format(minutes, seconds, separator, total_minutes)
     time_str = time_str.center(TERMINAL_WIDTH)
     if paused:
-        time_str = ''.join((BOLD_ON, BLUE, time_str, BOLD_OFF, DEFAULT))
+        time_str = ''.join((BOLD_ON, BLUE, time_str, DEFAULT, BOLD_OFF))
     print(time_str, end='')
 
 
@@ -290,6 +297,7 @@ def exit(reset_terminal, *args, code=0):
 
 
 def input_thread(input_recorder):
+    sys.stdout.write(ALTERNATE_SCREEN_ENTER)
     input_recorder.append(input())
 
 
@@ -302,6 +310,7 @@ def format_reset_string(string):
 def reset_loop():
     input_list = []
     _thread.start_new_thread(input_thread, (input_list,))
+    os.system('clear')
 
     even = True
     time_since_flash = 0
@@ -382,6 +391,8 @@ def check_os():
 
 
 def main():
+    args = build_parser().parse_args()
+
     check_os()
     check_tty()
     try:
@@ -393,12 +404,12 @@ def main():
         signal.signal(signal.SIGWINCH, resize_handler)
         signal.signal(signal.SIGINT, exit_partial_app)
 
-        args = build_parser().parse_args()
-
         main_loop(args.countdowns, args.sound_path, args.volume)
     except Exception as e:
-        print('Exception was raised: {}'.format(e).center(TERMINAL_WIDTH))
-        print('Cleaning up'.center(TERMINAL_WIDTH))
+        sys.stderr.write(
+            'Exception was raised: {}'.format(e).center(TERMINAL_WIDTH)
+        )
+
         exit_partial_app(code=1)
 
 
