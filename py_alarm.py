@@ -13,6 +13,7 @@ import signal
 import shutil
 import time
 import sys
+import tty
 import os
 
 from pydub import AudioSegment
@@ -47,7 +48,10 @@ REAL_DIRNAME = os.path.dirname(os.path.realpath(__file__))
 
 TIME_FORMAT = '{:02d}:{:02d} {} {:02d}:00'
 
+ITERM_PROGRAM_NAME = 'iTerm.app'
+PROFILE_NAME = 'pyalarm'
 
+TERMINAL_HEIGHT = None
 TERMINAL_WIDTH = None
 CHANGED = False
 
@@ -59,8 +63,8 @@ BOLD_ON, BOLD_OFF = '\033[1m', '\033[21m'
 BLUE, DEFAULT = '\033[34m', '\033[39m'
 
 
-def get_terminal_width():
-    return shutil.get_terminal_size((80, 20)).columns
+def get_terminal_size():
+    return shutil.get_terminal_size((80, 20))
 
 
 def setup_terminal():
@@ -181,6 +185,8 @@ def clear_if_changed():
         #  on the value of $TERM. They should be hidden anyway.
         # Also won't work on Windows. But nor will most of this...
         os.system('clear')
+        vertical_padding = max((TERMINAL_HEIGHT // 2 - 1), 0)
+        print('\n' * vertical_padding, end='')
         CHANGED = False
 
 
@@ -275,13 +281,13 @@ class SoundPathAction(argparse.Action):
 
 
 def resize_handler(*args):
-    global TERMINAL_WIDTH, CHANGED
+    global TERMINAL_WIDTH, TERMINAL_HEIGHT, CHANGED
 
-    TERMINAL_WIDTH = get_terminal_width()
+    TERMINAL_WIDTH, TERMINAL_HEIGHT = get_terminal_size()
     CHANGED = True
 
 
-def exit(reset_terminal, *args, code=0):
+def exit(reset_terminal, *args, code=0, extra_funcs=[]):
     try:
         print('', end='\r')
 
@@ -289,6 +295,8 @@ def exit(reset_terminal, *args, code=0):
             print('Goodbye!'.center(TERMINAL_WIDTH))
             time.sleep(GOODBYE_DELAY)
     finally:
+        for extra_func in filter(callable, extra_funcs):
+            extra_func()
         reset_terminal()
         sys.exit(code)
 
@@ -355,6 +363,70 @@ def check_tty():
     sys.exit(1)
 
 
+def str2hex(string):
+    return string.encode('utf-8').hex()
+
+
+def hex2str(hex_string):
+    return bytearray.fromhex(hex_string).decode()
+
+
+def send_terminfo_request(string):
+    hex_string = str2hex(string)
+    sys.stdout.write('\033P+q{}\033\\'.format(hex_string))
+    sys.stdout.flush()
+
+
+def read_terminfo_result():
+    while True:
+        char = sys.stdin.read(1)
+        if char == '=':
+            break
+    result = []
+    while True:
+        char = sys.stdin.read(1)
+        if char == '\x1b':
+            break
+        result.append(char)
+    sys.stdin.read(1)
+
+    return ''.join(result)
+
+
+def set_profile(profile_name):
+    sys.stdout.write('\033]50;SetProfile={}\a'.format(profile_name))
+    sys.stdout.flush()
+
+
+def get_profile():
+    file_desc = sys.stdin.fileno()
+    old_setting = termios.tcgetattr(file_desc)
+    tty.setraw(sys.stdin)
+
+    send_terminfo_request('iTerm2Profile')
+
+    result = read_terminfo_result()
+
+    termios.tcsetattr(file_desc, termios.TCSADRAIN, old_setting)
+
+    return hex2str(result)
+
+
+def darwin_handler():
+    term_program = os.environ['TERM_PROGRAM']
+
+    if term_program != ITERM_PROGRAM_NAME:
+        return
+
+    old_profile = get_profile()
+    set_profile(PROFILE_NAME)
+
+    def exit_handler():
+        set_profile(old_profile)
+
+    return exit_handler
+
+
 def check_os():
     platform_string = system().lower()
     if 'linux' in platform_string:
@@ -375,6 +447,7 @@ def check_os():
             ''.format(platform_string)
         )
         warnings.warn(version_warning_string, UserWarning)
+        return darwin_handler()
     else:
         import warnings
         version_warning_string = (
@@ -390,16 +463,16 @@ def check_os():
 def main():
     args = build_parser().parse_args()
 
-    check_os()
     check_tty()
+    os_handler = check_os()
     try:
         reset_terminal = setup_terminal()
-        exit_partial_app = partial(exit, reset_terminal)
+        exit_ = partial(exit, reset_terminal, extra_funcs=(os_handler,))
 
         resize_handler()
 
         signal.signal(signal.SIGWINCH, resize_handler)
-        signal.signal(signal.SIGINT, exit_partial_app)
+        signal.signal(signal.SIGINT, exit_)
 
         main_loop(args.countdowns, args.sound_path, args.volume)
     except Exception as e:
@@ -407,7 +480,7 @@ def main():
             'Exception was raised: {}'.format(e).center(TERMINAL_WIDTH)
         )
 
-        exit_partial_app(code=1)
+        exit_(code=1)
 
 
 if __name__ == '__main__':
