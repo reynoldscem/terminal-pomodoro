@@ -8,6 +8,10 @@ font larger / smaller on the fly).
 Makes pretty strong assumptions about Linux as the OS. Might work on other POSIX / UNIX OS's.
 Windows is a hard no.
 
+If you are on OSX and using iterm2, then if you have a profile called `pyalarm`
+it will be enabled while the program is running. I personally just use it to
+make the font size larger.
+
 Example:
 
 ```$ python py_alarm.py 1 2 3```
