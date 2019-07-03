@@ -164,7 +164,7 @@ def minutes_seconds_elapsed(elapsed):
 def print_time(minutes, seconds, total_minutes, paused=False):
     print('\r', end='')
 
-    separator = u'\u23F8' if paused else '/'
+    separator = '||' if paused else '::'
 
     time_str = TIME_FORMAT.format(minutes, seconds, separator, total_minutes)
     time_str = time_str.center(TERMINAL_WIDTH)
