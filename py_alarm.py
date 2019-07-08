@@ -62,6 +62,8 @@ INVERT_ON, INVERT_OFF = '\033[7m', '\033[27m'
 BOLD_ON, BOLD_OFF = '\033[1m', '\033[21m'
 BLUE, DEFAULT = '\033[34m', '\033[39m'
 
+WARN_DARWIN = False
+
 
 def get_terminal_size():
     return shutil.get_terminal_size((80, 20))
@@ -427,6 +429,28 @@ def darwin_handler():
     return exit_handler
 
 
+def warn_darwin(platform_string):
+    import warnings
+    version_warning_string = (
+        'System is {}. Mac may not work as expected. Support is planned.'
+        ' If this doesn\'t work for you please report your issue.'
+        ''.format(platform_string)
+    )
+    warnings.warn(version_warning_string, UserWarning)
+
+
+def warn_general(platform_string):
+    import warnings
+    version_warning_string = (
+        'System is {}. This may not work as expected.'
+        ' Support is not planned.'
+        ' If you would like support, and this tool doesn\'t work for you'
+        ' please report your issue, with details of your system.'
+        ''.format(platform_string)
+    )
+    warnings.warn(version_warning_string, UserWarning)
+
+
 def check_os():
     platform_string = system().lower()
     if 'linux' in platform_string:
@@ -440,24 +464,11 @@ def check_os():
             ''.format(platform_string)
         )
     elif 'darwin' in platform_string:
-        import warnings
-        version_warning_string = (
-            'System is {}. Mac may not work as expected. Support is planned.'
-            ' If this doesn\'t work for you please report your issue.'
-            ''.format(platform_string)
-        )
-        warnings.warn(version_warning_string, UserWarning)
+        if WARN_DARWIN:
+            warn_darwin(platform_string)
         return darwin_handler()
     else:
-        import warnings
-        version_warning_string = (
-            'System is {}. This may not work as expected.'
-            ' Support is not planned.'
-            ' If you would like support, and this tool doesn\'t work for you'
-            ' please report your issue, with details of your system.'
-            ''.format(platform_string)
-        )
-        warnings.warn(version_warning_string, UserWarning)
+        warn_general()
 
 
 def main():
