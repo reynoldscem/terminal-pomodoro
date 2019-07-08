@@ -185,7 +185,7 @@ def clear_if_changed():
         #  on the value of $TERM. They should be hidden anyway.
         # Also won't work on Windows. But nor will most of this...
         os.system('clear')
-        vertical_padding = max((TERMINAL_HEIGHT // 2 - 1), 0)
+        vertical_padding = max(((TERMINAL_HEIGHT - 1) // 2), 0)
         print('\n' * vertical_padding, end='')
         CHANGED = False
 
