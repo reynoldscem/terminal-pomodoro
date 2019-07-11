@@ -39,6 +39,9 @@ REFRESH_RATE = 0.05
 GOODBYE_DELAY = 0.2
 FLASH_TIME = 0.75
 
+VOLUME_ENV_VAR = 'PYALARM_VOLUME'
+DEFAULT_VOLUME = 0.05
+
 REAL_DIRNAME = os.path.dirname(os.path.realpath(__file__))
 DEFAULT_SOUNDPATH = os.path.join(
     REAL_DIRNAME, 'data',
@@ -106,16 +109,43 @@ class CycleAction(argparse.Action):
         setattr(args, self.dest, cycle(values))
 
 
-class VolumeAction(argparse.Action):
-    def __call__(self, parser, args, value, option_string=None):
-        value = float(value)
-        if not 0.0 <= value <= 1.0:
-            raise parser.error(
-                'Volume {} is outside of (0, 1)'
-                ''.format(value)
-            )
+def volume_out_of_bounds(volume):
+    return not 0 <= volume <= 1.0
 
-        setattr(args, self.dest, value)
+
+class VolumeAction(argparse.Action):
+    def __call__(self, parser, args, volume, option_string=None):
+        volume = float(volume)
+        if volume_out_of_bounds(volume):
+            raise parser.error('Volume {} is outside of (0, 1)'.format(volume))
+
+        setattr(args, self.dest, volume)
+
+
+def get_environment_volume():
+    volume_from_environment = os.getenv(VOLUME_ENV_VAR)
+    error_string = 'Tried to set volume by environment variable: "{}".'
+    error_string = error_string.format(VOLUME_ENV_VAR)
+
+    def do_error():
+        nonlocal error_string
+        error_string = error_string.format(volume_from_environment)
+        raise EnvironmentError(error_string) from None
+
+    if volume_from_environment is None:
+        return
+
+    try:
+        volume_from_environment = float(volume_from_environment)
+    except ValueError:
+        error_string += ' Appears not to be a valid float: "{}"'
+        do_error()
+
+    if volume_out_of_bounds(volume_from_environment):
+        error_string += ' Got value outside of [0, 1]: "{}"'
+        do_error()
+
+    return volume_from_environment
 
 
 def build_parser():
@@ -136,9 +166,10 @@ def build_parser():
         help='Path to alarm sound.'
     )
 
+    volume_from_env = get_environment_volume()
     parser.add_argument(
         '--volume', type=float,
-        default=0.05,
+        default=volume_from_env if volume_from_env else DEFAULT_VOLUME,
         action=VolumeAction,
         help='Volume from 0 to 1.'
     )
