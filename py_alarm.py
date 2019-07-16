@@ -460,6 +460,30 @@ def darwin_handler():
     return exit_handler
 
 
+def set_fontsize():
+    print()
+    subprocess.call(
+        ['xdotool', 'key', '--delay', '0'] +
+        ['ctrl+plus'] * 32
+    )
+
+
+def reset_fontsize():
+    subprocess.call(
+        ['xdotool', 'key', '--delay', '0'] +
+        ['ctrl+0']
+    )
+
+
+def linux_handler():
+    set_fontsize()
+
+    def exit_handler():
+        reset_fontsize()
+
+    return exit_handler
+
+
 def warn_darwin(platform_string):
     import warnings
     version_warning_string = (
@@ -485,7 +509,7 @@ def warn_general(platform_string):
 def check_os():
     platform_string = system().lower()
     if 'linux' in platform_string:
-        return
+        return linux_handler()
     elif 'win32' in platform_string:
         # Just give up... There is a plenty of posix / linux stuff here.
         #  Feel free to remove this and try it out if you'd like to push
