@@ -210,16 +210,22 @@ def print_time(minutes, seconds, total_minutes, paused=False):
     print(time_str, end='')
 
 
+def vertical_pad():
+    vertical_padding = max(((TERMINAL_HEIGHT - 1) // 2), 0)
+    print('\n' * vertical_padding, end='')
+
+
 def clear_if_changed():
     global CHANGED
     if CHANGED:
-        print()
+        # Perhaps not the best place for this, but it's not doing much harm...
+        sys.stdout.flush()
+
         # This might give you some garbage characters depending
         #  on the value of $TERM. They should be hidden anyway.
         # Also won't work on Windows. But nor will most of this...
         os.system('clear')
-        vertical_padding = max(((TERMINAL_HEIGHT - 1) // 2), 0)
-        print('\n' * vertical_padding, end='')
+        vertical_pad()
         CHANGED = False
 
 
@@ -349,6 +355,7 @@ def reset_loop():
     input_list = []
     _thread.start_new_thread(input_thread, (input_list,))
     os.system('clear')
+    vertical_pad()
 
     even = True
     time_since_flash = 0
